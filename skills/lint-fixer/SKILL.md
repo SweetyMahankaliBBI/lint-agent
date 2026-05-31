@@ -56,6 +56,30 @@ $dirty = (git status --porcelain).Count -gt 0
 
 **If dirty → STOP.** Ask user: "Working tree has uncommitted changes. Stash, commit, or abort?"
 
+### Baseline Tag
+
+Before any fixes begin, tag the current state so we can always roll back:
+
+```powershell
+# Create baseline tag for recovery
+git tag "lint-baseline/$(Get-Date -Format 'yyyy-MM-dd')" -m "Pre-lint-cleanup baseline"
+```
+
+### Capture Pre-existing Test Failures
+
+Record any tests that are ALREADY failing before we start — these are excluded from gate checks:
+
+```powershell
+# Run tests and capture existing failures
+$testOutput = & npx ng test --watch=false 2>&1
+$testOutput | Select-String "FAILED" | Out-File .lint-cleanup/pre-existing-failures.txt
+
+# Run lint baseline for comparison
+npx eslint . --format json > .lint-cleanup/lint-baseline.json
+```
+
+If tests already fail, the agent uses `.lint-cleanup/pre-existing-failures.txt` to distinguish between pre-existing failures and regressions caused by our fixes.
+
 ---
 
 ## [2] Inventory
@@ -174,7 +198,12 @@ For each remaining `(file, line, rule)` in priority order:
 
 ## [7] Verification Gates
 
-After EVERY chunk of 5 files. Read `workers/validation.md` for full details.
+After EVERY chunk. Chunk size is **adaptive**:
+- Files with 1-2 fixes: chunk = 10 files
+- Files with 3-10 fixes: chunk = 5 files (default)
+- Files with 10+ fixes: chunk = 1 file (complex, high risk)
+
+Read `workers/validation.md` for full details.
 
 ```
 Gate 1: Scoped Lint     → target rule count DECREASED, no new violations
@@ -229,6 +258,25 @@ Override file updated: removed <X> cleared entries."
 - Always verify the diff shows only removals
 
 **Never push automatically.** Ask user: "Push and open PR? (y/n)"
+
+### Progress Persistence
+
+After every successful chunk, update `.lint-cleanup/progress.json` so sessions can resume after crashes:
+
+```json
+{
+  "branch": "lint/feature-settings",
+  "phase": 2,
+  "lastCompletedChunk": 4,
+  "filesFixed": ["src/app/settings/list.component.ts", "..."],
+  "filesPending": ["src/app/settings/detail.component.ts", "..."],
+  "filesSkipped": ["src/app/settings/legacy.service.ts"],
+  "currentRule": "@typescript-eslint/no-explicit-any",
+  "timestamp": "2026-06-01T10:30:00Z"
+}
+```
+
+**On session start:** If `progress.json` exists for current branch → ask user: "Resume from chunk 4? (y/n)"
 
 If user says yes (or AUTO_PUSH mode):
 ```powershell

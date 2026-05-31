@@ -160,6 +160,32 @@ Dispatch the appropriate worker:
 - Phase 3 → Read workers/type-migration.md, execute
 - Phase 4 → Read workers/override-cleanup.md, execute
 
+### `execute --dry-run`
+
+Preview what the agent WOULD do without making any changes:
+
+```
+1. Run full analysis on the branch/scope
+2. Show file-by-file plan:
+
+🔍 DRY RUN — lint/feature-settings (no files will be changed)
+
+   Files to fix: 12
+   Estimated fixes: 47
+   
+   src/app/settings/list.component.ts:
+     - Line 12: no-explicit-any → replace `any` with inferred type
+     - Line 34: prefer-const → change `let` to `const`
+   src/app/settings/detail.service.ts:
+     - Line 8: no-unused-vars → remove unused import `OnDestroy`
+     - Line 45: no-deprecated → replace `RouterTestingModule`
+   ...
+   
+   Run `@lint-agent execute --branch lint/feature-settings` to apply.
+```
+
+No files touched, no branches created. Useful for reviewing the plan before committing.
+
 ### `fix-file <path>`
 
 Fix ALL lint warnings in a single specific file (all rule types at once):
