@@ -434,3 +434,177 @@ items.map((item) => this.transform(item));
 3. **Reuse existing types.** ALWAYS search `shared/interface/` before creating new types.
 4. **Smallest change wins.** Don't refactor the whole function — just fix the lint rule.
 5. **If it changes behavior, STOP.** Lint fixes must be compile-time only.
+
+---
+
+## Cascading Fix Patterns (Lessons Learned)
+
+These patterns come from real-world fixes where a single change cascades into spec files or downstream code. **Always check for cascading breakage.**
+
+---
+
+### AG Grid `ICellRendererParams` Generics
+
+**Problem:** When you add type parameters to `ICellRendererParams<TData, TValue>` in a component, the spec files break because their mocks use `as ICellRendererParams` (defaults to `<any, any, any>`), triggering `no-unsafe-argument`.
+
+```typescript
+// ❌ Component (before)
+public agInit(params: ICellRendererParams): void { ... }
+
+// ✅ Component (after)
+public agInit(params: ICellRendererParams<unknown, ApprovalRuleCondition[]>): void { ... }
+
+// ❌ Spec breaks:
+component.agInit({} as ICellRendererParams); // no-unsafe-argument
+
+// ✅ Spec fix — add matching generics:
+component.agInit({} as unknown as ICellRendererParams<unknown, ApprovalRuleCondition[]>);
+```
+
+**Workflow:**
+1. Fix the component method with generics
+2. IMMEDIATELY check the `.spec.ts` for that component
+3. Update all `as ICellRendererParams` casts to `as unknown as ICellRendererParams<TData, TValue>`
+4. If you use a local interface for TData → **export it** so the spec can import it
+
+---
+
+### Callback `.bind(this)` → Arrow Function Wrapper
+
+**Problem:** `processServerResponse(res, callback, warningCallback)` expects `() => void` but the actual callback has parameters. `.bind(this) as unknown as () => void` is a type-unsafe cast.
+
+```typescript
+// ❌ Before — cast hides signature mismatch
+this._service.processServerResponse(
+  res,
+  this.saveWarningCallback.bind(this) as unknown as () => void,
+  false,
+);
+
+// ✅ After — arrow wrapper preserves type safety
+this._service.processServerResponse(
+  res,
+  (): void => { this.saveWarningCallback(res); },
+  false,
+);
+```
+
+**When `errorCallback` expects `(...args: unknown[]) => void`:**
+```typescript
+// ✅ Wrap with matching signature
+(...args: unknown[]): void => {
+  this.saveErrorCallback(args[0], args[1] as string);
+},
+```
+
+**Rule:** Never use `.bind(this) as unknown as <type>`. Always wrap in a typed arrow function.
+
+---
+
+### `@typescript-eslint/no-confusing-void-expression`
+
+**What:** Placing a `void` return inside another expression (common: `expect(voidFn()).toBeUndefined()`).
+
+```typescript
+// ❌ Before — method returns void, expect() wraps it
+expect(service.overrideWarning(obj, 21)).toBeUndefined();
+
+// ✅ After — call separately
+service.overrideWarning(obj, 21);
+// No assertion needed for void methods, or test that it doesn't throw:
+expect(() => { service.overrideWarning(obj, 21); }).not.toThrow();
+```
+
+**Also appears in arrow returns:**
+```typescript
+// ❌ Before
+items.forEach((item) => component.process(item)); // void in arrow shorthand
+
+// ✅ After — use braces
+items.forEach((item) => { component.process(item); });
+```
+
+---
+
+### Test Mocks Must Match DOM Types
+
+**Problem:** `HTMLSelectElement.value` is always `string`, but tests mock it with `number`. When the implementation does `Number(event.target.value)`, the test passes accidentally but the mock is wrong.
+
+```typescript
+// ❌ Before — number value (wrong DOM type)
+{ target: { value: 1 } } as unknown as Event
+
+// ✅ After — string value (matches HTMLSelectElement.value)
+{ target: { value: '1' } } as unknown as Event
+```
+
+**Rule:** Always use string values when mocking `HTMLInputElement.value` or `HTMLSelectElement.value`.
+
+---
+
+### Unused Callback Parameters (Interface Contracts)
+
+**Problem:** Callback parameters required by an interface but unused in implementation. `_prefix` doesn't always silence `no-unused-vars`.
+
+```typescript
+// ❌ Before — unused optional param still triggers lint
+public deleteWarningCallback(
+  row: FinSimpleRecord,
+  _response?: FinResponse<boolean>, // lint: '_response' is defined but never used
+): void {
+  this.onRowDeleteConfirm(row);
+}
+
+// ✅ After — remove if optional and at end of signature
+public deleteWarningCallback(
+  row: FinSimpleRecord,
+): void {
+  this.onRowDeleteConfirm(row);
+}
+```
+
+**Decision tree:**
+- If parameter is **optional AND last** → remove it
+- If parameter is **required by interface** → keep `_` prefix (verify eslint config allows it)
+- If parameter is **in the middle** → keep `_` prefix (can't remove without shifting args)
+
+---
+
+### `@angular-eslint/id-denylist` in Object Literals
+
+**Problem:** Property named `number` (or `string`, `boolean`, etc.) in object literals triggers denylist.
+
+```typescript
+// ❌ Before
+expenseCategory.accountSummary = {
+  number: undefined, // id-denylist: 'number' is restricted
+
+// ✅ After — quote the key
+expenseCategory.accountSummary = {
+  'number': undefined, // passes lint
+```
+
+**Note:** This only applies to object literals/types. Variable names MUST be renamed (can't quote those).
+
+---
+
+### Exporting Interfaces for Spec Access
+
+**Problem:** When typing a component method with a local interface, the spec file can't access it for proper type assertions.
+
+```typescript
+// ❌ Component — interface is private
+interface BbidRowData { userInfo?: { email?: string } }
+
+// Spec can't reference BbidRowData for proper casting
+component.agInit(params as unknown as ICellRendererParams); // falls back to any generics
+
+// ✅ Component — export the interface
+export interface BbidRowData { userInfo?: { email?: string } }
+
+// Spec imports and uses it
+import { BBIDDetailsCellRendererComponent, BbidRowData } from './bbid-details-cell-renderer.component';
+component.agInit(params as unknown as ICellRendererParams<BbidRowData>);
+```
+
+**Rule:** If a type is used in a public method signature AND the component has a spec file → export the type.

@@ -166,6 +166,9 @@ For each remaining `(file, line, rule)` in priority order:
 - **Never prepend imports blindly** → Search the file for existing imports from the same module FIRST. Merge into the existing import statement. Adding a duplicate `import { X } from 'module'` causes `no-duplicate-imports` errors
 - **When narrowing from `any`** → Check ALL call sites of the method/variable before changing the type. Hidden arguments, overloads, or optional params masked by `any` will cause test failures
 - **Cast at usage site, not variable declaration** → For mock/spy variables, cast where the value is used (e.g., `.and.returnValue(x as T)`) not on the variable itself. Casting the variable hides spy methods like `.toHaveBeenCalled()`
+- **Always check the spec file** → After changing a method signature (adding generics, removing params, changing types), IMMEDIATELY lint the corresponding `.spec.ts`. Spec casts like `as ICellRendererParams` or `as unknown as Event` often break when the source type changes. Fix them in the same commit.
+- **Export interfaces used in public signatures** → If you introduce a type parameter (e.g., `ICellRendererParams<MyRowData>`) and the component has a `.spec.ts`, the interface MUST be exported so specs can import it for proper casting.
+- **Never `.bind(this) as unknown as () => void`** → Wrap callbacks in arrow functions instead. Casts hide signature mismatches and drop argument type safety.
 
 ---
 
@@ -471,3 +474,104 @@ If a session is interrupted, the next session can resume:
 ```
 
 Progress is tracked per-file in ownership.json, not just per-branch.
+
+---
+
+## Fast Mode (`--fast`)
+
+Activated with `execute --fast` or `execute --branch N --fast`. Trades per-chunk safety for 3-5x speed on low-risk rules.
+
+### What changes in fast mode
+
+| Step | Normal | Fast |
+|------|--------|------|
+| Autofix | Per-rule, scoped | **All autofixable rules, entire branch, one shot** |
+| Batch size | 5 files | **10 files** |
+| Per-chunk gates | lint + tsc + build + tests | **lint + tsc only** |
+| Final gates | All | **All (lint + tsc + build + tests + coverage)** |
+| Fix approach | Read 15 lines → edit → re-read | **Read full file → plan all fixes → single multi_replace** |
+
+### Fast mode workflow
+
+```
+[1] Autofix blast     → eslint --fix on ALL scoped files (one command)
+[2] Verify blast      → lint + tsc only (catch regressions from autofix)
+[3] Commit autofix    → Separate commit: "fix(lint): autofix P1/P2 rules in <scope>"
+[4] Manual fix loop   → 10 files per chunk, read full file, batch edits
+[5] Per-chunk gates   → lint + tsc ONLY (skip build + tests)
+[6] Final validation  → FULL: lint + tsc + build + tests + coverage
+[7] Commit + report
+```
+
+### Step [1] Autofix Blast
+
+```powershell
+# Fix ALL safe rules at once across the entire scope
+$scopeFiles = Get-Content .lint-cleanup/branch-N.md | Where-Object { $_ -match '\.ts$' }
+$fileArgs = $scopeFiles -join ' '
+
+npx eslint $fileArgs --fix --no-error-on-unmatched-pattern 2>&1
+```
+
+This handles `prefer-const`, `prefer-optional-chain`, `prefer-nullish-coalescing`, `explicit-member-accessibility`, `prefer-spread`, `prefer-for-of` in one shot.
+
+### Step [4] Batch Edit Strategy
+
+Instead of read-edit-verify per line:
+
+```
+1. READ: Full file content
+2. PLAN: Identify ALL lint violations in that file (from lint output)
+3. EDIT: Apply ALL fixes in one multi_replace_string_in_file call
+4. NEXT FILE: Don't re-read, move on
+5. After 10 files → run lint + tsc
+```
+
+**Why this is faster:** One tool call with 5 replacements is faster than 5 separate read-edit-verify cycles. Line drift doesn't matter because you're working from a single read.
+
+### Step [5] Relaxed Gates (per-chunk)
+
+```powershell
+# Gate 1: Scoped lint — count must not increase
+npx eslint $chunkFiles 2>&1 | Select-String "error"
+
+# Gate 2: TypeScript — must compile
+npx tsc --noEmit 2>&1 | Select-String "error TS"
+
+# SKIP: build, tests, coverage (deferred to final)
+```
+
+**Why tsc is NOT skippable:** Removing a parameter, adding generics, or changing a type can cascade to files you didn't touch. `tsc` catches this in 5 seconds. Build/tests take 60-120 seconds and only matter for behavioral changes.
+
+### Step [6] Final Validation (mandatory, no shortcuts)
+
+After ALL manual fixes are done:
+
+```powershell
+# Full build
+ng build
+
+# Full tests
+ng test --watch=false --code-coverage
+
+# Coverage check
+# Statement coverage must be >= 80%
+
+# Silencer check
+git diff --unified=0 | Select-String "eslint-disable|@ts-ignore|as any"
+# Must return NOTHING
+```
+
+**If final validation fails:** Bisect which chunk broke it. Revert that chunk, re-apply with normal mode gates.
+
+### When NOT to use fast mode
+
+- **P3 fixes (`no-explicit-any`, `no-unsafe-*`)** — Type changes cascade unpredictably. Use normal mode.
+- **P4 fixes (`no-deprecated`, `no-floating-promises`)** — May change behavior. Use normal mode.
+- **Unfamiliar codebase** — You don't know what's safe. Use normal mode for first branch.
+
+### When fast mode shines
+
+- **P1/P2 only** — `prefer-const`, `id-denylist`, `explicit-member-accessibility`, `prefer-optional-chain`
+- **Spec files** — Test code changes don't affect production behavior
+- **Second pass** — You already ran normal mode once, now cleaning up residuals
