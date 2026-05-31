@@ -2,9 +2,19 @@
 
 A standalone, framework-agnostic agent platform for systematically eliminating lint/type debt from any Angular, React, or Vue SPA.
 
+## Setup (One Time)
+
+```powershell
+git clone https://github.com/SweetyMahankaliBBI/lint-agent.git c:\Projects\lint-agent
+cd c:\Projects\lint-agent
+.\setup.ps1
+```
+
+After setup, `@lint-agent` is available in Copilot Chat in any workspace.
+
 ## Quick Start
 
-1. **Open this folder** in VS Code as a workspace (or add to existing workspace)
+1. **Open your project** in VS Code
 2. **Point it at your project:**
    ```
    @lint-agent analyze c:\path\to\your\spa
@@ -134,3 +144,12 @@ No config file needed. The agent auto-detects:
 - **Reverts failed chunks** automatically
 - **Logs everything** to `.lint-cleanup/` for auditability
 - **Respects ownership** — won't touch files claimed by another worker
+
+## Feedback
+
+Try it on your feature area and let us know:
+- Does it work on your folder?
+- Any rules it handles incorrectly?
+- Suggestions for improvement?
+
+Open an [Issue](https://github.com/SweetyMahankaliBBI/lint-agent/issues) or submit a PR.
