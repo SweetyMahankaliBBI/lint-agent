@@ -163,7 +163,7 @@ $checks = @(
     @{ Path = "$InstallPath\workers\validation.md"; Name = "Validation gates" },
     @{ Path = "$InstallPath\workers\shared-worker.md"; Name = "Shared Worker" },
     @{ Path = "$InstallPath\workers\feature-worker.md"; Name = "Feature Worker" },
-    @{ Path = "$InstallPath\references\fix-recipes.md"; Name = "Fix recipes" },
+    @{ Path = "$InstallPath\references\rule-patterns.md"; Name = "Rule patterns" },
     @{ Path = "$InstallPath\references\verify-fixes.ps1"; Name = "Verify script" },
     @{ Path = "$InstallPath\references\partition-planner.ps1"; Name = "Partition planner" },
     @{ Path = "$InstallPath\references\override-analyzer.ps1"; Name = "Override analyzer" },
