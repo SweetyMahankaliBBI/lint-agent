@@ -1,6 +1,18 @@
-# Engineering Debt Reduction Platform (EDRP)
+# Engineering Debt Reduction Platform - Ultra-Clean Version
 
-A standalone, framework-agnostic agent platform for systematically eliminating lint/type debt from any Angular, React, or Vue SPA.
+**Analyze → Plan → Execute. Zero files. Zero overhead.**
+
+Framework-agnostic lint cleanup for Angular, React, or Vue SPAs.
+
+## What Changed: Old vs New
+
+| Aspect | Old (Complex) | New (Ultra-Clean) |
+|--------|---------------|-------------------|
+| **Startup** | 30 min | 30 sec |
+| **Files Created** | 10-15 tracking files | **0 files** |
+| **Instructions** | 500+ lines | 195 lines |
+| **Phases** | 3 sequential | 1 direct |
+| **Scripts** | 3 PowerShell | 0 needed |
 
 ## Setup (One Time)
 
@@ -12,7 +24,47 @@ cd c:\Projects\lint-agent
 
 After setup, `@lint-agent` is available in Copilot Chat in any workspace.
 
-## Quick Start
+---
+
+## Quick Start (New Ultra-Clean Version)
+
+**Just say what directory to fix:**
+
+```
+User: @lint-agent fix src/app/invoice
+
+Agent: ✅ Branch created
+Agent: 🔧 Auto-fixed 67 violations  
+Agent: 🔨 Fixing remaining 23 violations...
+Agent: ✅ Validated in batches
+Agent: ✅ Committed
+Agent: 📊 Fixed 90 violations in 24 files
+```
+
+**Total time: 2 minutes. Files created: 0.**
+
+---
+
+## Architecture (Simplified)
+
+```
+Old (Complex):                    New (Ultra-Clean):
+┌─────────────────────┐          ┌──────────────────┐
+│ Master Orchestrator │          │  Single Workflow │
+├─────────────────────┤          ├──────────────────┤
+│ Phase 1: Shared     │          │  1. Create branch│
+│ Phase 2: Features   │   →→→    │  2. Autofix      │
+│ Phase 3: Type Migr  │          │  3. Manual fix   │
+│ Phase 4: Cleanup    │          │  4. Validate     │
+└─────────────────────┘          │  5. Commit       │
+         ↓                        └──────────────────┘
+┌─────────────────────┐
+│ Creates 15 files    │          Zero files created
+│ 30 min startup      │          30 sec startup
+└─────────────────────┘
+```
+
+## Quick Start (Old Complex Version - Still Available)
 
 1. **Open your project** in VS Code
 2. **Point it at your project:**
@@ -28,33 +80,29 @@ After setup, `@lint-agent` is available in Copilot Chat in any workspace.
    @lint-agent execute --branch lint/shared
    ```
 
-## Architecture
-
-```
-┌─────────────────────────────────────────┐
-│         Master Orchestrator             │
-│        (lint-agent.agent.md)            │
-├─────────────────────────────────────────┤
-│  Phase 1    Phase 2       Phase 3       │ Phase 4
-│  Shared  →  Feature ×N →  Type Migr →  Override Cleanup
-│  Worker     Workers       Worker        Worker
-└─────────────────────────────────────────┘
-         ↓           ↓           ↓
-    ┌─────────────────────────────────┐
-    │  Validation Gates (every chunk) │
-    │  Lint → TSC → Build → Tests    │
-    └─────────────────────────────────┘
-```
-
 ## File Structure
 
+### Ultra-Clean Version (Recommended)
 ```
 lint-agent/
-├── lint-agent.agent.md          # Master Orchestrator (entry point)
-├── README.md                    # This file
+├── lint-agent-SIMPLIFIED.agent.md    # NEW: Ultra-clean orchestrator (70 lines)
 ├── skills/
 │   └── lint-fixer/
-│       └── SKILL.md             # Core playbook (workflow steps)
+│       └── SKILL-SIMPLIFIED.md       # NEW: Zero-file workflow (195 lines)
+├── SIMPLIFICATION-GUIDE.md           # NEW: Migration guide
+├── ULTRA-CLEAN-FLOW.md               # NEW: Execution flow diagram
+└── README.md                         # This file
+```
+
+**Uses: VS Code + ESLint only. Creates: 0 files.**
+
+### Old Complex Version (Still Available)
+```
+lint-agent/
+├── lint-agent.agent.md          # Master Orchestrator (complex)
+├── skills/
+│   └── lint-fixer/
+│       └── SKILL.md             # Core playbook (500+ lines)
 ├── workers/
 │   ├── shared-worker.md         # Phase 1: shared/core code
 │   ├── feature-worker.md        # Phase 2: feature directories
@@ -67,6 +115,41 @@ lint-agent/
     ├── partition-planner.ps1    # File-disjoint branch partitioner
     └── override-analyzer.ps1   # Override file parser
 ```
+
+**Uses: 3 PowerShell scripts, 4 worker types. Creates: 10-15 tracking files.**
+
+---
+
+## 🔄 How to Switch Versions
+
+### Switch to Ultra-Clean (Recommended)
+```powershell
+# Backup current version
+Copy-Item "lint-agent.agent.md" "lint-agent.agent.md.OLD" -Force
+Copy-Item "skills/lint-fixer/SKILL.md" "skills/lint-fixer/SKILL.OLD.md" -Force
+
+# Activate ultra-clean version
+Copy-Item "lint-agent-SIMPLIFIED.agent.md" "lint-agent.agent.md" -Force
+Copy-Item "skills/lint-fixer/SKILL-SIMPLIFIED.md" "skills/lint-fixer/SKILL.md" -Force
+
+# Restart Copilot (Ctrl+Shift+P → "Reload Window")
+```
+
+### Switch Back to Complex Version
+```powershell
+# Restore from backup
+Copy-Item "lint-agent.agent.md.OLD" "lint-agent.agent.md" -Force
+Copy-Item "skills/lint-fixer/SKILL.OLD.md" "skills/lint-fixer/SKILL.md" -Force
+
+# Restart Copilot
+```
+
+### Use Both Side-by-Side
+Keep both available:
+- Complex: `@lint-agent` (for full project analysis)
+- Ultra-clean: Load simplified files manually when needed
+
+---
 
 ## Supported Frameworks
 

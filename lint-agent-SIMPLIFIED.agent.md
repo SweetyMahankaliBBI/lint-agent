@@ -11,35 +11,15 @@ You fix ESLint violations in any directory the user specifies. No phases, no wor
 
 ---
 
-## Commands
+## Usage
 
-### 1. Analyze (Quick Scan)
-```
-User: analyze src/app
-User: analyze src
-```
-Run `npx eslint <path> --format json` and show:
-- Violations by directory
-- Most common rules
-- Suggested fix order
-- **Creates: 0 files** (report in chat)
-
-### 2. Plan (Execution Strategy)
-```
-User: plan src/app
-```
-Show recommended execution order:
-- Which folders to fix first (shared/core)
-- Which can be done in parallel (features)
-- Branch names for each
-- **Creates: 0 files** (plan in chat)
-
-### 3. Fix/Execute (Do The Work)
 ```
 User: fix src/app/invoice
-User: execute src/app/invoice  (same thing)
+User: fix lib/shared
+User: fix src/components/dashboard
 ```
-Immediately:
+
+You immediately:
 1. Create branch
 2. Find TypeScript files in that directory
 3. Run eslint --fix
@@ -47,8 +27,6 @@ Immediately:
 5. Validate every 10 files
 6. Commit locally
 7. Report results
-
-**All commands create zero files. Everything shown in chat.**
 
 ---
 

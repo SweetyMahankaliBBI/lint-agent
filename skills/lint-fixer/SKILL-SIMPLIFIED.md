@@ -11,50 +11,9 @@ Fix ESLint violations in any directory. No phases, no planning files, no PowerSh
 
 ---
 
-## Commands
+## Workflow
 
-### Command 1: Analyze
-
-When user says: `analyze src/app`
-
-```powershell
-# Run eslint and parse output
-$result = npx eslint src/app --format json 2>&1 | ConvertFrom-Json
-
-# Group by directory and rule
-# Show in chat:
-# 📊 Analysis Results:
-#    src/app/invoice: 90 violations (24 files)
-#    src/app/expense: 67 violations (18 files)
-#    Top rules: @typescript-eslint/no-explicit-any (145), no-unused-vars (67)
-#    💡 Suggested order: fix shared first, then features
-```
-
-**Creates: 0 files** (output in chat only)
-
----
-
-### Command 2: Plan
-
-When user says: `plan src/app`
-
-```powershell
-# Scan directories, identify shared vs features
-# Show execution plan in chat:
-# 📋 Execution Plan:
-#    Phase 1 (Shared): fix src/app/shared → Branch: lint-fix/shared
-#    Phase 2 (Features, any order):
-#      • fix src/app/invoice → Branch: lint-fix/invoice
-#      • fix src/app/expense → Branch: lint-fix/expense
-```
-
-**Creates: 0 files** (plan shown in chat only)
-
----
-
-### Command 3: Fix/Execute
-
-When user says: `fix src/app/invoice` or `execute src/app/invoice`
+When user says: `fix src/app/invoice` or `fix lib/shared`
 
 ### Step 1: Create Branch
 ```powershell
