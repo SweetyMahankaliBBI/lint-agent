@@ -1,103 +1,233 @@
-# Engineering Debt Reduction Platform - Ultra-Clean Version
+# Lint Agent
 
-**Analyze → Plan → Execute. Zero files. Zero overhead.**
+> Systematically fix ESLint violations with safety checks and validation at every step.
 
-Framework-agnostic lint cleanup for Angular, React, or Vue SPAs.
-
-## What Changed: Old vs New
-
-| Aspect | Old (Complex) | New (Ultra-Clean) |
-|--------|---------------|-------------------|
-| **Startup** | 30 min | 30 sec |
-| **Files Created** | 10-15 tracking files | **0 files** |
-| **Instructions** | 500+ lines | 195 lines |
-| **Phases** | 3 sequential | 1 direct |
-| **Scripts** | 3 PowerShell | 0 needed |
-
-## Setup (One Time)
-
-```powershell
-git clone https://github.com/SweetyMahankaliBBI/lint-agent.git c:\Projects\lint-agent
-cd c:\Projects\lint-agent
-.\setup.ps1
-```
-
-After setup, `@lint-agent` is available in Copilot Chat in any workspace.
+Framework-agnostic lint cleanup for Angular, React, Vue, or any TypeScript/JavaScript project.
 
 ---
 
-## Quick Start (New Ultra-Clean Version)
+## 🎯 Purpose
 
-**Just say what directory to fix:**
+This agent automates ESLint violation fixes in large codebases by:
+- Processing violations systematically (by rule type or file)
+- Running tests after each fix to ensure nothing breaks
+- Providing detailed progress reports
+- Skipping complex violations that require manual review
 
-```
-User: @lint-agent fix src/app/invoice
-
-Agent: ✅ Branch created
-Agent: 🔧 Auto-fixed 67 violations  
-Agent: 🔨 Fixing remaining 23 violations...
-Agent: ✅ Validated in batches
-Agent: ✅ Committed
-Agent: 📊 Fixed 90 violations in 24 files
-```
-
-**Total time: 2 minutes. Files created: 0.**
+**Ultimate Goal:** Remove or minimize override files by fixing all lint violations and enabling strict linting.
 
 ---
 
-## Architecture (Simplified)
+## 📋 Prerequisites
+
+Before using this agent, ensure:
+- ✅ Git working directory is clean (commit or stash changes)
+- ✅ All tests are passing (`npm test`)
+- ✅ Dependencies are installed (`npm install`)
+- ✅ You have a backup or can easily revert changes
+
+---
+
+## 🚀 Quick Start
+
+### Analyze Current State
 
 ```
-Old (Complex):                    New (Ultra-Clean):
-┌─────────────────────┐          ┌──────────────────┐
-│ Master Orchestrator │          │  Single Workflow │
-├─────────────────────┤          ├──────────────────┤
-│ Phase 1: Shared     │          │  1. Create branch│
-│ Phase 2: Features   │   →→→    │  2. Autofix      │
-│ Phase 3: Type Migr  │          │  3. Manual fix   │
-│ Phase 4: Cleanup    │          │  4. Validate     │
-└─────────────────────┘          │  5. Commit       │
-         ↓                        └──────────────────┘
-┌─────────────────────┐
-│ Creates 15 files    │          Zero files created
-│ 30 min startup      │          30 sec startup
-└─────────────────────┘
+@lint-agent analyze
 ```
 
-## Quick Start (Old Complex Version - Still Available)
+This shows:
+- Total errors and warnings
+- Top violation types by frequency
+- Recommended fix order by priority
+- Estimated time per category
 
-1. **Open your project** in VS Code
-2. **Point it at your project:**
-   ```
-   @lint-agent analyze c:\path\to\your\spa
-   ```
-3. **Plan the work:**
-   ```
-   @lint-agent plan --branches 3
-   ```
-4. **Execute:**
-   ```
-   @lint-agent execute --branch lint/shared
-   ```
+### Fix All Violations (Recommended)
 
-## File Structure
+```
+@lint-agent fix-all
+```
 
-### Ultra-Clean Version (Recommended)
+This will:
+1. Process violations in priority order (safest first)
+2. Run tests after each fix batch
+3. Skip violations that cause test failures
+4. Provide a detailed summary report
+
+### Fix Specific Violation Type
+
+```
+@lint-agent fix-type @typescript-eslint/no-unused-vars
+@lint-agent fix-type @typescript-eslint/no-explicit-any
+```
+
+Useful when you want to focus on one specific type of violation.
+
+### Fix All Violations in a File
+
+```
+@lint-agent fix-file src/app/invoice/invoice.component.ts
+@lint-agent fix-file invoice.component.ts
+```
+
+This will fix all violations in the specified file (all rule types), useful when:
+- You want to clean up a specific file completely
+- You're working on a file and want to resolve all its violations
+- You need to ensure a specific file has no lint issues
+
+---
+
+## 📁 File Structure
+
 ```
 lint-agent/
-├── lint-agent-SIMPLIFIED.agent.md    # NEW: Ultra-clean orchestrator (70 lines)
+├── README.md                    # This file
+├── lint-agent.agent.md         # Agent orchestrator (main file)
+├── QUICK-REFERENCE.md          # One-page cheat sheet
 ├── skills/
 │   └── lint-fixer/
-│       └── SKILL-SIMPLIFIED.md       # NEW: Zero-file workflow (195 lines)
-├── SIMPLIFICATION-GUIDE.md           # NEW: Migration guide
-├── ULTRA-CLEAN-FLOW.md               # NEW: Execution flow diagram
-└── README.md                         # This file
+│       └── SKILL.md            # Detailed workflow and fix patterns
+└── references/
+    ├── rule-patterns.md        # Fix patterns for each rule
+    └── session-lessons.md      # Lessons learned
 ```
 
-**Uses: VS Code + ESLint only. Creates: 0 files.**
+---
 
-### Old Complex Version (Still Available)
+## 🎯 Fix Priority Order
+
+| Priority | Rule                                   | Time  | Risk |
+| -------- | -------------------------------------- | ----- | ---- |
+| 1️⃣       | @typescript-eslint/no-unused-vars      | 30min | Low  |
+| 1️⃣       | id-denylist                            | 5min  | Low  |
+| 1️⃣       | explicit-member-accessibility          | 15min | Low  |
+| 2️⃣       | @typescript-eslint/no-explicit-any     | 2h    | Med  |
+| 2️⃣       | explicit-module-boundary-types         | 1h    | Med  |
+| 3️⃣       | @angular-eslint/prefer-inject          | 1h    | Med  |
+| 3️⃣       | prefer-optional-chain                  | 30min | Low  |
+| 4️⃣       | @typescript-eslint/no-deprecated       | 2h    | High |
+
+---
+
+## ✅ Key Features
+
+### Zero File Creation
+- No tracking files, planning documents, or status logs
+- Only creates code fixes and git commits
+- Everything reported in chat
+
+### Automatic Validation
+- Validates every 10 files during fixing
+- Runs full test suite before committing
+- Reverts immediately on any failure
+
+### Safety First
+- Never suppresses rules with eslint-disable
+- Never commits code that breaks tests
+- Never pushes without user review
+
+### Smart Batching
+- Processes files in batches of 10
+- Validates each batch independently
+- Skips problematic files automatically
+
+---
+
+## 📊 Example Session
+
 ```
+User: @lint-agent fix-type @typescript-eslint/no-unused-vars
+
+Agent: ✅ Created branch: lint-fix/no-unused-vars
+Agent: 🔧 Running eslint --fix...
+Agent: ✅ Auto-fixed 45 violations
+Agent: 🔨 Manually fixing remaining 12 violations...
+       Batch 1/2: 10 files...
+Agent: ✅ Validated batch 1/2
+       Batch 2/2: 2 files...
+Agent: ✅ Validated batch 2/2
+Agent: ✅ Final validation: lint ✓ build ✓ tests ✓
+Agent: ✅ Regenerated override file
+Agent: ✅ Committed locally
+Agent: 📊 Fixed 57 violations in 24 files
+
+Ready to review and push.
+```
+
+---
+
+## 🔧 Common Fix Patterns
+
+### Remove Unused Variables
+```typescript
+// ❌ Before
+import { Foo, Bar } from './types';
+
+// ✅ After
+import { Foo } from './types';
+```
+
+### Replace Any with Proper Types
+```typescript
+// ❌ Before
+function process(data: any) { }
+
+// ✅ After
+function process(data: unknown) {
+  if (typeof data === 'object' && data !== null) {
+    // Type guard
+  }
+}
+```
+
+### Add Access Modifiers
+```typescript
+// ❌ Before
+class MyComponent {
+  name: string;
+}
+
+// ✅ After
+class MyComponent {
+  public name: string;
+}
+```
+
+See [QUICK-REFERENCE.md](QUICK-REFERENCE.md) for more patterns.
+
+---
+
+## 🚨 Safety Rules
+
+### ✅ Always
+- Validate every 10 files during manual fixes
+- Run full validation (lint + build + test) before committing
+- Revert immediately on any validation failure
+- Fix or skip violations — never suppress rules
+
+### ❌ Never
+- Add new rules to override files (only remove as fixed)
+- Commit code that breaks tests or builds
+- Batch more than 10 files without validation
+- Push changes without user review
+
+---
+
+## 📚 Documentation
+
+- **[QUICK-REFERENCE.md](QUICK-REFERENCE.md)** - One-page cheat sheet
+- **[skills/lint-fixer/SKILL.md](skills/lint-fixer/SKILL.md)** - Detailed workflow
+- **[references/rule-patterns.md](references/rule-patterns.md)** - Fix patterns for each rule
+
+---
+
+## 🎯 Core Principles
+
+1. **Zero files created** - Only code fixes and git commits
+2. **Validate often** - Every 10 files during manual fixes
+3. **Fail fast** - Revert immediately on any error
+4. **Never suppress** - Fix or skip, never disable rules
+5. **User controls push** - Agent commits locally, user reviews and pushes
 lint-agent/
 ├── lint-agent.agent.md          # Master Orchestrator (complex)
 ├── skills/

@@ -1,278 +1,215 @@
-# 🎯 Quick Reference - Ultra-Clean Lint Agent
+# Lint Agent - Quick Reference
 
-## One Command to Rule Them All
+> Folder-wise parallel lint cleanup. Shared first, then features simultaneously.
 
-```
-@lint-agent fix <directory>
-```
+## Goal
 
-That's it. No phases. No planning. No files created.
-
----
-
-## What Happens When You Say "fix X"
-
-```
-1. git checkout -b lint-fix/X        (Create branch)
-2. npx eslint X --fix                (Autofix cheap wins)
-3. npx eslint X --format json        (Parse remaining errors)
-4. [VS Code edit tools]              (Fix violations manually)
-5. npx eslint X && npx tsc --noEmit  (Validate every 10 files)
-6. npm run lint && build && test     (Final validation)
-7. git commit -m "fix(lint): X"      (Commit locally)
-8. [Show summary in chat]            (Report results)
-```
-
-**Total time: 2-5 minutes depending on directory size.**
+Fix all ESLint violations folder by folder, enabling strict linting across the codebase.
+- Never add rules to override files — only remove as fixed
+- Fixes must ONLY reduce violations, never increase them
+- Tests pass, build succeeds, zero new violations anywhere
 
 ---
 
-## What Files Get Created
+## Commands
 
-**Answer: ZERO**
+```
+# Scan any directory — shows violations per folder
+analyze <path>          e.g. analyze src   or   analyze lib/components
 
-❌ No `.lint-cleanup/` directory  
-❌ No `inventory.json`  
-❌ No `branch-plan.json`  
-❌ No `ownership.json`  
-❌ No `progress.json`  
-❌ No `failed-files.txt`  
-❌ No status tracking documents  
+# Show execution order and branch names
+plan <path>             e.g. plan src   or   plan src/app
 
-✅ Just your fixed code + git commit
+# Fix all violations in a specific folder
+fix <folder>            e.g. fix src/shared   or   fix src/features/billing
+```
+
+> Works with any project structure. Replace `<path>` / `<folder>` with your actual directory.
 
 ---
 
-## Examples
+## Execution Order
 
-### Example 1: Fix Invoice Feature
 ```
-User: fix src/app/invoice
+Step 1 — Fix shared/core FIRST (sequential):
+  fix <root>/shared        -> lint-fix/shared
+  fix <root>/core          -> lint-fix/core
 
-Agent: ✅ Created branch: lint-fix/invoice
-Agent: 📁 Found 24 TypeScript files
-Agent: 🔧 Auto-fixed 67 violations
-Agent: 🔨 Fixing remaining 23 manually...
-Agent: ✅ Batch 1/3 validated (10 files)
-Agent: ✅ Batch 2/3 validated (10 files)
-Agent: ✅ Batch 3/3 validated (4 files)
-Agent: ✅ Final validation passed
-Agent: ✅ Committed
-Agent: 📊 Fixed 90 violations in 24 files
-       Skipped 3 files (manual review)
-
-Time: 2 minutes
+Step 2 — Fix features in PARALLEL (independent):
+  fix <root>/features/a    -> lint-fix/feature-a  -+
+  fix <root>/features/b    -> lint-fix/feature-b   | simultaneous
+  fix <root>/features/c    -> lint-fix/feature-c  -+
 ```
 
-### Example 2: Fix Shared Library
+`<root>` = your project's source root (`src`, `src/app`, `lib`, `projects/my-app/src`, etc.).
+Feature folders are independent — run them in separate sessions at the same time.
+
+---
+
+## When to Use Each Command
+
+| Command | Use when |
+|---|---|
+| `analyze src/app` | Starting cleanup, want violation counts per folder |
+| `plan src/app` | Ready to start, want execution order and branch names |
+| `fix <folder>` | Fixing one folder; each session takes a different feature |
+
+---
+
+## Pre-Flight Checklist
+
+- [ ] Git status is clean
+- [ ] All tests passing: `npm test`
+- [ ] Dependencies installed: `npm install`
+- [ ] Shared/core folders fixed before starting features
+
+---
+
+## What Happens When You Run "fix <folder>"
+
 ```
-User: fix lib/shared
-
-Agent: ✅ Branch: lint-fix/shared
-Agent: 📁 15 files found
-Agent: 🔧 Auto-fixed 34 violations
-Agent: 🔨 Fixing 12 remaining...
-Agent: ✅ All batches validated
-Agent: ✅ Committed
-Agent: 📊 Fixed 46 violations in 15 files
-
-Time: 90 seconds
-```
-
-### Example 3: Fix Components
-```
-User: fix src/components/dashboard
-
-Agent: ✅ Branch: lint-fix/dashboard
-Agent: 📁 8 files found
-Agent: 🔧 Auto-fixed 23 violations
-Agent: 🔨 Fixing 5 remaining...
-Agent: ✅ Validated
-Agent: ✅ Committed
-Agent: 📊 Fixed 28 violations in 8 files
-
-Time: 60 seconds
+# <folder> = any actual path in your project
+0. Record baseline violation count + test status
+1. git checkout -b lint-fix/<folder-name>
+2. npx eslint <folder> --fix            (autofix cheap wins)
+3. npx eslint <folder> --format json    (parse remaining)
+4. Fix manually in priority order P1->P4
+5. npx eslint + tsc --noEmit            (validate every 10 files)
+6. npm run lint + build + test          (final validation)
+7. git commit -m "fix(lint): <folder-name>"
+8. Show summary with violation count reduction
 ```
 
 ---
 
-## Common Patterns Fixed
+## Within-Folder Priority Order
 
-| Rule | Before | After |
-|------|--------|-------|
-| `no-explicit-any` | `data: any` | `data: unknown` |
-| `no-unused-vars` | `import {A,B,C}` (only B used) | `import {B}` |
-| `component-class-suffix` | `class InvoiceView` | `class InvoiceViewComponent` |
-| `prefer-const` | `let x = 5; return x;` | `const x = 5; return x;` |
-| `no-inferrable-types` | `count: number = 0` | `count = 0` |
+Fix violations in this order to minimize risk:
+
+| Priority | Rules | Risk |
+|---|---|---|
+| P1 | no-unused-vars, id-denylist, explicit-member-accessibility | Low |
+| P2 | no-explicit-any, explicit-module-boundary-types, no-unsafe-* | Medium |
+| P3 | prefer-inject, prefer-optional-chain, prefer-spread | Medium |
+| P4 | no-deprecated, no-floating-promises | Higher |
+| Skip | prefer-standalone, complex refactors | Defer |
+
+---
+
+## Common Fix Patterns
+
+### No Unused Vars
+```typescript
+// Remove unused import
+import { Foo, Bar } from './types';   // Bar unused
+import { Foo } from './types';
+
+// Interface compliance — prefix with _ instead of removing
+function handle(event: Event, _context: Context) { }
+```
+
+### No Explicit Any — Choose Strategy
+```typescript
+// a) Known type
+function process(data: any)  ->  function process(data: ProcessData)
+
+// b) Truly unknown
+function handle(input: any)  ->  function handle(input: unknown) {
+  if (typeof input === 'object' && input !== null && 'id' in input) {
+    return (input as { id: string }).id;
+  }
+}
+
+// c) Partial object
+const x: any = { name: '' }  ->  const x: Partial<MyType> = { name: '' }
+
+// d) Test mock
+const mock: any = { }        ->  jasmine.createSpyObj<MyService>('s', ['method'])
+```
+
+### Prefer Inject
+```typescript
+// Before
+constructor(private svc: MyService, private router: Router) {}
+
+// After
+private readonly svc = inject(MyService);
+private readonly router = inject(Router);
+// Remove constructor if empty after conversion
+```
+
+### Explicit Accessibility Defaults
+| Member | Modifier |
+|---|---|
+| Template-bound / lifecycle / public API | `public` |
+| Injected service | `private readonly` |
+| Internal helper / field | `private` |
+
+### ID Denylist
+```typescript
+const config = { number: 42 };       // Before
+const config = { 'number': 42 };     // After
+```
+
+---
+
+## Validation Checklist (CRITICAL)
+
+After every 10 files (batch) and at the end:
+
+| Check | Command | Must Pass |
+|---|---|---|
+| Folder clean | `npx eslint <folder>` | Zero violations in folder |
+| No new violations | `npm run lint` | Total count lower than baseline |
+| TypeScript | `npx tsc --noEmit` | No compile errors |
+| Build | `npm run build` | Succeeds |
+| Tests | `npm test` | 0 failures, count same or higher |
+
+**If ANY check fails:** `git checkout -- .`, skip the file, continue.
 
 ---
 
 ## Error Recovery
 
-If validation fails:
-```
-Agent: ⚠️ Batch 2/3 validation failed
-Agent: ↩️ Reverted batch 2
-Agent: 📝 Skipping problematic files
-Agent: ✅ Continuing with batch 3
-```
-
-Agent automatically:
-- Reverts failed batch
-- Skips problematic files
-- Continues with remaining work
-- Reports what was skipped
-
-**You never lose working code.**
-
----
-
-## Validation Gates
-
-Every 10 files:
 ```powershell
-npx eslint $path           # No lint errors
-npx tsc --noEmit           # No type errors
-```
+# Revert a batch
+git checkout -- .
 
-Final validation:
-```powershell
-npm run lint               # Full project lint
-npm run build              # Compiles successfully
-npm test                   # All tests pass
+# Check if test failure pre-existed
+git stash
+npm test
+git stash pop
+# New failure -> revert branch  |  Pre-existing -> note, continue
 ```
-
-**If any gate fails → automatic revert → safe.**
 
 ---
 
-## Comparison: Old vs New
+## Skipped Patterns
 
-### Old Agent (Complex)
-```
-User: fix src/app/invoice
-↓
-Agent: Reading configurations...          (2 min)
-Agent: Running override-analyzer.ps1...   (3 min)
-Agent: Creating inventory.json...         (5 min)
-Agent: Running partition-planner.ps1...   (5 min)
-Agent: Creating branch-plan.json...       (2 min)
-Agent: Checking ownership...              (3 min)
-Agent: Creating ownership.json...         (2 min)
-Agent: Phase 1 must complete first!       (!!!)
-↓
-Result: 22 min elapsed, 0 violations fixed, 7 files created
-```
+These are deferred — do not attempt during automated fixing:
+- `prefer-standalone` — major component refactor
+- Deeply nested `no-unsafe-*` — requires domain knowledge
+- Deprecated APIs with no direct replacement — needs coordinated update
 
-### New Agent (Ultra-Clean)
-```
-User: fix src/app/invoice
-↓
-Agent: ✅ Branch created
-Agent: 🔧 Auto-fixed 67 violations
-Agent: 🔨 Fixing 23 remaining...
-Agent: ✅ Validated
-Agent: ✅ Committed
-Agent: 📊 Fixed 90 violations
-↓
-Result: 2 min elapsed, 90 violations fixed, 0 files created
+---
+
+## Never Do This
+
+```typescript
+// FORBIDDEN — never suppress rules
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// eslint-disable-next-line no-unused-vars
 ```
 
-**45x faster. Zero overhead.**
+Fix or skip. Never disable.
 
 ---
 
-## Philosophy
+## Key Principles
 
-### ❌ Don't Do This (Old Way)
-- Create planning documents
-- Write state to disk
-- Run PowerShell scripts
-- Check phase dependencies
-- Coordinate multiple workers
-- Track ownership
-- Persist progress to JSON
-
-### ✅ Do This (New Way)
-- Analyze in memory
-- Plan in memory
-- Execute immediately
-- Validate incrementally
-- Report in chat
-- Commit to git
-
-**The best file is no file.**
-
----
-
-## When to Use Which Version
-
-### Use Ultra-Clean When:
-- ✅ Fixing specific directories
-- ✅ Quick cleanup of feature code
-- ✅ Want immediate results
-- ✅ Don't want tracking files
-- ✅ Working on small-to-medium projects
-
-### Use Complex When:
-- 📊 Need detailed analysis reports
-- 📊 Managing multi-branch coordination
-- 📊 Want progress tracking across weeks
-- 📊 Large enterprise projects (50k+ LOC)
-
-**Most users want Ultra-Clean.**
-
----
-
-## How to Activate
-
-```powershell
-cd c:\Projects\lint-agent
-
-# Activate ultra-clean version
-Copy-Item "lint-agent-SIMPLIFIED.agent.md" "lint-agent.agent.md" -Force
-Copy-Item "skills/lint-fixer/SKILL-SIMPLIFIED.md" "skills/lint-fixer/SKILL.md" -Force
-
-# Restart VS Code (Ctrl+Shift+P → "Reload Window")
-```
-
-Now `@lint-agent fix <directory>` uses the ultra-clean workflow.
-
----
-
-## Documentation
-
-- **[SKILL-SIMPLIFIED.md](skills/lint-fixer/SKILL-SIMPLIFIED.md)** - Complete workflow (195 lines)
-- **[lint-agent-SIMPLIFIED.agent.md](lint-agent-SIMPLIFIED.agent.md)** - Agent config (70 lines)
-- **[ULTRA-CLEAN-FLOW.md](ULTRA-CLEAN-FLOW.md)** - Execution flow diagram
-- **[SIMPLIFICATION-GUIDE.md](SIMPLIFICATION-GUIDE.md)** - Migration guide
-- **[README.md](README.md)** - Full documentation
-
----
-
-## Support
-
-**Questions?** Open an issue on GitHub.
-
-**Want to contribute?** Submit a PR.
-
-**Love it?** ⭐ Star the repo!
-
----
-
-## Summary
-
-**Input:** `@lint-agent fix <directory>`
-
-**Output:** 
-- ✅ Fixed code
-- ✅ Git commit
-- ✅ Summary in chat
-- ✅ Zero tracking files
-
-**Time:** 1-5 minutes
-
-**Philosophy:** Analyze → Plan → Execute
-
-**The best file is no file.**
+1. **Shared first** — Always fix shared/core before features
+2. **P1 before P4** — Fix safe rules first, risky ones last
+3. **One branch per folder** — Clean, isolated, mergeable
+4. **Parallel features** — Feature folders are independent
+5. **Baseline must only go down** — Never introduce new violations
+6. **User controls push** — Agent commits, user reviews and merges
