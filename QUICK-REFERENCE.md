@@ -78,6 +78,8 @@ Feature folders are independent — run them in separate sessions at the same ti
 6. npm run lint + build + test          (final validation)
 7. git commit -m "fix(lint): <folder-name>"
 8. Show summary with violation count reduction
+9. Show: git push origin lint-fix/<folder-name>
+   Ask: "Ready to create a PR?" (auto-detects Azure DevOps vs GitHub)
 ```
 
 ---

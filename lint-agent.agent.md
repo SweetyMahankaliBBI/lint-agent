@@ -140,7 +140,7 @@ git add .
 git commit -m "fix(lint): clean up $folderName"
 ```
 
-### Step 9: Report
+### Step 9: Report + Next Steps
 ```
 Fixed: 90 violations in 24 files (src/app/invoice)
   [1/4] P1 no-unused-vars:          34 fixed  ✓ lint ✓ tsc
@@ -149,8 +149,28 @@ Fixed: 90 violations in 24 files (src/app/invoice)
   [4/4] P3 prefer-inject:           12 fixed  ✓ lint ✓ tsc
 Skipped: 3 files (manual review needed)
 Validation: 90 violations -> 0  |  lint ✓  build ✓  tests ✓
-Branch: lint-fix/invoice — ready to review and merge
+Branch: lint-fix/invoice — committed locally
 ```
+
+Then show the user:
+```
+Next steps — review the branch, then:
+
+  git push origin lint-fix/invoice
+
+Ready to create a PR?
+  - Azure DevOps: https://dev.azure.com/<org>/<project>/_git/<repo>/pullrequestcreate?sourceRef=lint-fix/invoice
+  - GitHub:       https://github.com/<org>/<repo>/compare/lint-fix/invoice
+
+Would you like me to create the PR now? (I can do this if you confirm.)
+```
+> If the user says yes, detect the remote URL (`git remote get-url origin`), then use the matching
+> MCP tool — `mcp_azure_devops__repo_create_pull_request` for Azure DevOps or
+> `mcp_github_mcp_se_create_pull_request` for GitHub — to create the PR with:
+> - title: `fix(lint): clean up <folderName>`
+> - description: the fix summary above
+> - source branch: `lint-fix/<folderName>`
+> - target branch: `master` (or `main` — check default branch)
 
 **Creates: 0 tracking files** (only code fixes + git commit)
 
