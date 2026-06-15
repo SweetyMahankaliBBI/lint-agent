@@ -36,10 +36,11 @@ Shows the execution order and branch names:
 
 ### 3. Fix
 ```
-fix <folder>            e.g.  fix src/shared   or  fix src/features/billing
+fix <folder> --rule <rule-name>    e.g.  fix src/shared --rule no-explicit-any
+                                         fix src/features/billing --rule prefer-inject
 ```
-Fixes **all ESLint violations in that folder** (all rule types), in priority order (P1 before P4).
-One branch per folder. Feature folders can be run simultaneously in separate sessions.
+Fixes **ONE ESLint rule in ONE folder**. One branch + one PR per rule per folder.
+Fix rules in priority order (P1 before P4). Merge each PR before starting the next rule.
 
 > These paths are examples — the agent works with any project structure.
 
@@ -48,42 +49,46 @@ One branch per folder. Feature folders can be run simultaneously in separate ses
 ## Execution Model
 
 ```
-Step 1 — Fix shared first (sequential, blocks features):
-  fix <root>/shared      -> branch: lint-fix/shared
-  fix <root>/core        -> branch: lint-fix/core
+Step 1 — Fix shared first (sequential, blocks features), one rule at a time:
+  fix <root>/shared --rule no-explicit-any   -> branch: lint-fix/shared/no-explicit-any
+  fix <root>/shared --rule no-unused-vars    -> branch: lint-fix/shared/no-unused-vars
+  fix <root>/core   --rule prefer-inject     -> branch: lint-fix/core/prefer-inject
 
-Step 2 — Fix features in parallel (independent):
-  fix <root>/feature-a   -> branch: lint-fix/feature-a  -+
-  fix <root>/feature-b   -> branch: lint-fix/feature-b   | parallel
-  fix <root>/feature-c   -> branch: lint-fix/feature-c  -+
+Step 2 — Fix features in parallel (independent), one rule at a time:
+  fix <root>/feature-a --rule no-explicit-any  -> branch: lint-fix/feature-a/no-explicit-any  -+
+  fix <root>/feature-b --rule no-explicit-any  -> branch: lint-fix/feature-b/no-explicit-any   | parallel
+  fix <root>/feature-c --rule no-explicit-any  -> branch: lint-fix/feature-c/no-explicit-any  -+
 ```
 
 `<root>` is whatever source directory your project uses — `src`, `src/app`, `lib`, `projects/my-app/src`, etc.
 
-Each `fix <folder>` session:
-1. Creates its own branch
-2. Fixes all violations in that folder, ordered P1 → P4
-3. Validates independently (every 10 files + final)
-4. Commits locally
-5. User reviews and merges
+Each `fix <folder> --rule <rule>` session:
+1. Creates its own branch (`lint-fix/<folder>/<rule>`)
+2. Fixes only that rule in the target folder
+3. Validates every 10 files (eslint + tsc)
+4. Runs pre-PR gate (`ng generate` + `ng lint` + `ng test`) — must all pass
+5. Commits and pushes only if gate passes
+6. Creates PR with scoped title and description
+7. User reviews and merges before next rule starts
 
 ---
 
-## Workflow: When User Says "fix <folder>"
+## Workflow: When User Says "fix <folder> --rule <rule>"
 
 ### Step 0: Pre-Fix Baseline
 ```powershell
 # Record baseline before touching anything
-npm run lint 2>&1 | Select-String "problem"
-npm test
+ng lint 2>&1 | Select-String "problem"
+ng test --watch=false
 ```
 - Record total violation count and test status
 - **CRITICAL:** Final count MUST be lower — fixes must ONLY reduce violations, never increase them
 
 ### Step 1: Create Branch
 ```powershell
-$folderName = Split-Path $path -Leaf
-git checkout -b "lint-fix/$folderName"
+$folderName = (Split-Path $path -Leaf) -replace '[/\\]', '-'
+$ruleName   = $rule -replace '[/@]', '' -replace '/', '-'
+git checkout -b "lint-fix/$folderName/$ruleName"
 ```
 
 ### Step 2: Find TypeScript Files
@@ -92,16 +97,17 @@ Get-ChildItem -Path $path -Recurse -Filter *.ts |
   Where-Object { $_.Name -notmatch '\.spec\.ts$' }
 ```
 
-### Step 3: Run Autofix
+### Step 3: Run Autofix (scoped to the target rule)
 ```powershell
-npx eslint $path --fix
+npx eslint $path --fix --rule "$rule: error"
 ```
 
-### Step 4: Get Remaining Violations
+### Step 4: Get Remaining Violations for That Rule
 ```powershell
-npx eslint $path --format json | ConvertFrom-Json
+$violations = npx eslint $path --format json | ConvertFrom-Json
+# Filter to only the target rule
+$violations | ForEach-Object { $_.messages | Where-Object { $_.ruleId -eq $rule } }
 ```
-Group remaining violations by rule. Fix them in priority order:
 
 | Priority | Rules | Risk |
 |---|---|---|
@@ -126,51 +132,51 @@ npx tsc --noEmit
 - **CRITICAL:** NO new violations introduced — in the folder OR anywhere else
 - If validation fails → revert batch (`git checkout -- .`), skip file, continue
 
-### Step 7: Final Validation (All Must Pass)
+### Step 7: Pre-PR Gate (ALL must pass — no exceptions)
 ```powershell
-npm run lint    # Total violation count must be lower than baseline
-npm run build   # Must succeed — no TypeScript errors
-npm test        # ALL tests pass, test count same or higher
-```
-**CRITICAL:** If ANY of these fail, STOP immediately, revert changes, report the failure.
+# 1. Regenerate lint file overrides to reflect the fixed state
+ng generate @blackbaud-internal/skyux-angular-builders:lint-file-overrides
 
-### Step 8: Commit
+# 2. Full Angular lint check — violation count must be lower than baseline
+ng lint
+
+# 3. All tests must pass
+ng test --watch=false
+```
+**CRITICAL:** If ANY of these fail — STOP immediately, revert changes (`git checkout -- .`), report the failure. Do NOT commit or push.
+
+### Step 8: Commit and Push (only after gate passes)
 ```powershell
 git add .
-git commit -m "fix(lint): clean up $folderName"
+git commit -m "fix(lint): $ruleName in $folderName"
+git push origin "lint-fix/$folderName/$ruleName"
 ```
 
-### Step 9: Report + Next Steps
+### Step 9: Create PR
+Use PR title: `fix(lint): <rule-name> in <folder-name>  (<N> violations → 0)`
+
+PR description template:
 ```
-Fixed: 90 violations in 24 files (src/app/invoice)
-  [1/4] P1 no-unused-vars:          34 fixed  ✓ lint ✓ tsc
-  [2/4] P1 id-denylist:              6 fixed  ✓ lint ✓ tsc
-  [3/4] P2 no-explicit-any:         38 fixed  ✓ lint ✓ tsc
-  [4/4] P3 prefer-inject:           12 fixed  ✓ lint ✓ tsc
-Skipped: 3 files (manual review needed)
-Validation: 90 violations -> 0  |  lint ✓  build ✓  tests ✓
-Branch: lint-fix/invoice — committed locally
+## Lint Fix: <rule-name> — <folder-name>
+
+Rule: `<rule-name>`
+Folder: `<folder-path>`
+Violations fixed: N → 0
+Files changed: X
+
+### What was done
+- <brief summary of fix strategy used>
+
+### Pre-PR Validation
+- [x] ng generate @blackbaud-internal/skyux-angular-builders:lint-file-overrides ✓
+- [x] ng lint ✓ (violations: <baseline> → <new count>)
+- [x] ng test ✓ (all tests pass)
+- [x] No new violations introduced elsewhere
 ```
 
-Then show the user:
-```
-Next steps — review the branch, then:
-
-  git push origin lint-fix/invoice
-
-Ready to create a PR?
-  - Azure DevOps: https://dev.azure.com/<org>/<project>/_git/<repo>/pullrequestcreate?sourceRef=lint-fix/invoice
-  - GitHub:       https://github.com/<org>/<repo>/compare/lint-fix/invoice
-
-Would you like me to create the PR now? (I can do this if you confirm.)
-```
-> If the user says yes, detect the remote URL (`git remote get-url origin`), then use the matching
-> MCP tool — `mcp_azure_devops__repo_create_pull_request` for Azure DevOps or
-> `mcp_github_mcp_se_create_pull_request` for GitHub — to create the PR with:
-> - title: `fix(lint): clean up <folderName>`
-> - description: the fix summary above
-> - source branch: `lint-fix/<folderName>`
-> - target branch: `master` (or `main` — check default branch)
+Detect the remote URL (`git remote get-url origin`), then use the matching MCP tool:
+- Azure DevOps: `mcp_azure_devops__repo_create_pull_request`
+- GitHub: `mcp_github_mcp_se_create_pull_request`
 
 **Creates: 0 tracking files** (only code fixes + git commit)
 
@@ -198,22 +204,20 @@ Would you like me to create the PR now? (I can do this if you confirm.)
 
 ## Validation Rules (CRITICAL)
 
-### After Each Folder Fix, ALL Must Pass:
+### After Each Rule Fix, ALL Must Pass:
 
-1. **Lint Validation:**
-   - Violation count in target folder MUST reach zero
-   - Total violation count MUST be lower than baseline
+1. **Override Regeneration:**
+   - `ng generate @blackbaud-internal/skyux-angular-builders:lint-file-overrides` must complete cleanly
+
+2. **Lint Validation:**
+   - `ng lint` — violation count MUST be lower than baseline
    - **CRITICAL: NO new violations introduced anywhere**
 
-2. **Build Validation:**
-   - `npm run build` must succeed
-   - No TypeScript compilation errors
-
 3. **Test Validation:**
-   - `npm test` — ALL tests pass (0 failures)
+   - `ng test --watch=false` — ALL tests pass (0 failures)
    - No new test failures; test count same or higher than baseline
 
-**If ANY validation fails:** STOP immediately, revert, skip problematic file, continue with next.
+**If ANY validation fails:** STOP immediately, revert (`git checkout -- .`), skip problematic file, do NOT create PR.
 
 ---
 
@@ -225,35 +229,29 @@ User: plan src
 
 Agent: Execution Plan for src
 
-  Step 1 — Fix first (shared, others depend on these):
-    fix src/shared          -> lint-fix/shared       (156 violations)
-    fix src/core            -> lint-fix/core         (43 violations)
+  Step 1 — Fix shared first, one rule at a time (P1 → P4):
+    fix src/shared --rule no-unused-vars     -> lint-fix/shared/no-unused-vars   (34 violations)
+    fix src/shared --rule no-explicit-any    -> lint-fix/shared/no-explicit-any  (89 violations)
+    fix src/shared --rule prefer-inject      -> lint-fix/shared/prefer-inject    (33 violations)
 
-  Step 2 — Fix in parallel (independent features):
-    fix src/features/billing  -> lint-fix/billing    (90 violations)
-    fix src/features/reports  -> lint-fix/reports    (67 violations)
-    fix src/features/settings -> lint-fix/settings   (34 violations)
+  Step 2 — Fix features in parallel, one rule at a time:
+    fix src/features/billing --rule no-explicit-any  -> lint-fix/billing/no-explicit-any
+    fix src/features/reports --rule no-explicit-any  -> lint-fix/reports/no-explicit-any
 
-User: fix src/shared
+User: fix src/shared --rule no-unused-vars
 
 Agent: Baseline: 7428 violations, all tests passing
-Agent: Created branch: lint-fix/shared
-Agent: Running eslint --fix... auto-fixed 89 violations
-Agent: Manually fixing remaining 67 violations (priority order)...
-       [1/3] P1 no-unused-vars (34 violations, 10 files)
-Agent: Validated batch 1 — lint ✓ tsc ✓
-       [2/3] P2 no-explicit-any (21 violations, 8 files)
-Agent: Validated batch 2 — lint ✓ tsc ✓
-       [3/3] P3 prefer-inject (12 violations, 6 files)
-Agent: Validated batch 3 — lint ✓ tsc ✓
-Agent: Final validation: 7428 -> 7272  |  lint ✓  build ✓  tests ✓
-Agent: Committed: lint-fix/shared
-Agent: Fixed 156 violations in 38 files
+Agent: Created branch: lint-fix/shared/no-unused-vars
+Agent: Running eslint --fix --rule no-unused-vars... auto-fixed 12 violations
+Agent: Manually fixing remaining 22 violations in 10 files...
+Agent: Validated batch 1 (10 files) — ng lint ✓ tsc ✓
+Agent: Validated batch 2 (12 files) — ng lint ✓ tsc ✓
+Agent: Pre-PR gate: ng generate ✓  ng lint ✓  ng test ✓
+Agent: 7428 -> 7394 violations  |  committed & pushed lint-fix/shared/no-unused-vars
+Agent: PR created: fix(lint): no-unused-vars in shared  (34 violations → 0)
 
-Now start feature folders in parallel:
-  Session A: fix src/features/billing
-  Session B: fix src/features/reports
-  Session C: fix src/features/settings
+Next: after PR is merged →
+  fix src/shared --rule no-explicit-any
 ```
 
 ---
@@ -261,8 +259,8 @@ Now start feature folders in parallel:
 ## Key Principles
 
 1. **Shared first** — Always fix shared/core before features
-2. **Priority order within folder** — P1 (safe) before P4 (risky) per folder
-3. **One branch per folder** — Clean, isolated, mergeable
-4. **Parallel features** — Feature folders are independent
-5. **Never increase violations** — Baseline count must only go down
-6. **User controls push** — Agent commits locally, user reviews and merges
+2. **One rule at a time** — One rule per folder per branch per PR
+3. **Priority order** — P1 (safe) before P4 (risky); merge each PR before the next rule
+4. **Pre-PR gate always** — `ng generate` + `ng lint` + `ng test` must all pass before committing
+5. **Parallel features** — Feature folders are independent; same rule can run in parallel across features
+6. **Never increase violations** — Baseline count must only go down
