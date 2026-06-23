@@ -17,6 +17,22 @@ Shared/core folders must be fixed first; feature folders can run in parallel.
 - Zero tracking files (only code fixes + git commits)
 - Fix or skip — never suppress rules with eslint-disable
 
+**Git Workflow Rules:**
+- ✅ **Always branch from master** (fetch + pull first)
+- ✅ **Never branch from another feature branch**
+- ✅ **Only commit if ALL 5 validation gates pass**
+- ✅ **Create PR after each step completes**
+- ✅ **Immediately move to next step** (don't wait for PR merge)
+- ✅ **Return to master before starting next step**
+- ❌ **Never commit with failing tests, lint, or build**
+
+**Validation Gates (All Must Pass Before Commit):**
+1. Scoped Lint (changed files)
+2. Full Lint (entire project)
+3. TypeScript Compilation
+4. Production Build
+5. Unit Tests
+
 ---
 
 ## Commands
@@ -92,6 +108,17 @@ Fix ONE ESLint rule in the specified folder. One branch and one PR per rule per 
 Fix rules in priority order (P1 first). Merge each PR before starting the next rule in the same folder.
 
 #### Step 0: Pre-Fix Baseline
+
+**CRITICAL Git Workflow:**
+1. **Always start from master:**
+   ```powershell
+   git checkout master
+   git fetch origin
+   git pull origin master
+   ```
+2. **NEVER branch from another feature branch - always from master!**
+
+**Record baseline metrics:**
 ```powershell
 ng lint 2>&1 | Select-String "problem"
 ng test --watch=false
@@ -99,8 +126,14 @@ ng test --watch=false
 Record total violation count and confirm all tests pass before touching any code.
 **CRITICAL:** The final count after fixing MUST be lower than this baseline.
 
-#### Step 1: Create Branch
+#### Step 1: Create Branch from Master
 ```powershell
+# Ensure on master with latest changes
+git checkout master
+git fetch origin
+git pull origin master
+
+# Create feature branch
 $folderName = (Split-Path $path -Leaf) -replace '[/\\]', '-'
 $ruleName   = $rule -replace '[/@]', '' -replace '/', '-'
 git checkout -b "lint-fix/$folderName/$ruleName"
@@ -145,36 +178,69 @@ For the target rule, process all affected files in batches of 10:
 
 #### Step 6: Validate Every 10 Files
 ```powershell
-npx eslint $path
+# 1. Scoped lint (changed files only)
+npx eslint $path --format json
+
+# 2. TypeScript compilation
 npx tsc --noEmit
+
+# 3. Build check (optional during batches, required at end)
+ng build --configuration=production
 ```
 - **CRITICAL:** NO new violations introduced — in this folder OR anywhere else
 - If validation fails → `git checkout -- .` (revert batch), skip the file, continue
 
-#### Step 7: Pre-PR Gate (ALL must pass — no exceptions)
+#### Step 7: Pre-Commit Gate (ALL must pass — no exceptions)
+
+**Run ALL 5 validation gates before committing:**
 
 ```powershell
-# 1. Regenerate lint file overrides to reflect the fixed state
-ng generate @blackbaud-internal/skyux-angular-builders:lint-file-overrides
+# 1. Scoped Lint - verify fixed files
+npx eslint $path --format json
 
-# 2. Full Angular lint — total violation count must be lower than baseline
+# 2. Full Lint - ensure no cross-file regressions
 ng lint
 
-# 3. All Angular tests must pass
+# 3. TypeScript Compilation
+npx tsc --noEmit
+
+# 4. Production Build
+ng build --configuration=production
+
+# 5. All Unit Tests
 ng test --watch=false
 ```
 
-**CRITICAL:** If ANY check fails — STOP, revert all changes (`git checkout -- .`), report the specific failure. Do NOT commit, push, or create a PR.
+**CRITICAL REQUIREMENTS:**
+- ✅ ALL 5 gates MUST pass
+- ✅ Total violation count MUST be lower than baseline
+- ✅ NO new violations introduced anywhere in codebase
+- ❌ **DO NOT commit if ANY gate fails**
+- ❌ **DO NOT suppress rules** (no eslint-disable, @ts-ignore, as any)
 
-#### Step 8: Commit and Push (only after gate passes)
+**If ANY check fails:**
+- STOP immediately
+- Diagnose and fix the failing check
+- If unfixable, revert changes: `git checkout -- .`
+- Report the specific failure to user
+- DO NOT proceed to commit/push/PR
+
+#### Step 8: Commit and Push (ONLY after all gates pass)
+
 ```powershell
+# Only run this if Step 7 passed ALL checks
 git add .
-git commit -m "fix(lint): $ruleName in $folderName"
+git commit -m "fix(lint): resolve $ruleName violations in $folderName"
 git push origin "lint-fix/$folderName/$ruleName"
 ```
 
+**Commit Message Format:**
+- `fix(lint): resolve [rule-name] violations in [folder]`
+- Example: `fix(lint): resolve prefer-inject violations in shared/core`
+
 #### Step 9: Create PR
-Use PR title: `fix(lint): <rule-name> in <folder-name>  (<N> violations → 0)`
+
+Use PR title: `fix(lint): <rule-name> in <folder-name> (<N> violations → 0)`
 
 PR description:
 ```
@@ -188,11 +254,14 @@ Files changed: X
 ### What was done
 - <brief summary of fix strategy used>
 
-### Pre-PR Validation
-- [x] ng generate @blackbaud-internal/skyux-angular-builders:lint-file-overrides ✓
-- [x] ng lint ✓ (violations: <baseline> → <new count>)
-- [x] ng test ✓ (all tests pass)
+### Pre-Commit Validation (All Passed ✓)
+- [x] Scoped Lint ✓ (changed files only)
+- [x] Full Lint ✓ (violations: <baseline> → <new count>)
+- [x] TypeScript Compilation ✓
+- [x] Production Build ✓
+- [x] Unit Tests ✓ (all tests pass)
 - [x] No new violations introduced elsewhere
+- [x] No rules suppressed (no eslint-disable, @ts-ignore, as any)
 ```
 
 Detect the remote URL (`git remote get-url origin`), then use the matching MCP tool:
@@ -201,6 +270,35 @@ Detect the remote URL (`git remote get-url origin`), then use the matching MCP t
 
 Set:
 - source branch: `lint-fix/<folderName>/<ruleName>`
+- target branch: `master`
+- title: as above
+- description: as above
+
+#### Step 10: Prepare for Next Step (Don't Wait for PR Merge)
+
+**After creating the PR, immediately prepare for the next step:**
+
+```powershell
+# 1. Checkout master
+git checkout master
+
+# 2. Fetch and pull latest
+git fetch origin
+git pull origin master
+
+# 3. Verify clean state
+git status
+
+# 4. You're now ready to start Step 0 for the next rule
+```
+
+**IMPORTANT:** 
+- ✅ **Don't wait for PR approval/merge** - move to next step immediately
+- ✅ **Your changes are in the feature branch** - safe to start next work
+- ✅ **Always create new branches from master** - keeps branches independent
+- ✅ **Each PR is isolated** - no dependencies between branches
+
+**Note:** When your PR eventually gets merged, your next branch (already created from master) will need to merge those changes later. This is fine and expected - Git will handle it during the final merge.
 - target branch: `master` (or `main` — check default branch)
 
 ---
