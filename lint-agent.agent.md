@@ -1,4 +1,5 @@
 ---
+mode: agent
 description: "Fix ESLint violations folder by folder. Shared libraries first, then feature folders in parallel."
 tools: ['edit', 'execute/runInTerminal', 'execute/getTerminalOutput', 'read/problems', 'todo']
 ---
